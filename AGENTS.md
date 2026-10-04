@@ -8,7 +8,7 @@ Full stack (db + migrations + seed + api + ui), from repo root:
 
 ```bash
 docker compose up --build
-# backend http://localhost:8000, frontend http://localhost:3000, db localhost:5432
+# backend http://localhost:8000, frontend http://localhost:3000, db localhost:5433
 ```
 
 Backend entrypoint `backend/app/main.py`. Container startup order matters: `alembic upgrade head` → `python3 -m app.cli --users ../seed/users.json` → `uvicorn`. Run Alembic from `backend/` (relies on `prepend_sys_path = .` in `alembic.ini`).
@@ -18,7 +18,7 @@ Seed logins (password `ops123` for all): `admin@example.com`, `ops1@example.com`
 
 ## Test / verify
 
-Backend tests need a **separate live Postgres** `desk_test` on `localhost:55432` — hardcoded in `backend/tests/conftest.py`, *not* the compose DB on 5432. No sqlite fallback.
+Backend tests need a **separate live Postgres** `desk_test` on `localhost:55432` — hardcoded in `backend/tests/conftest.py`, *not* the compose DB on 5433. No sqlite fallback.
 
 ```bash
 cd backend

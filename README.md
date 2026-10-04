@@ -23,6 +23,9 @@ This command will:
 4. Start the FastAPI backend on `http://localhost:8000`
 5. Start the Next.js frontend on `http://localhost:3000`
 
+(PostgreSQL is mapped to `localhost:5433` on the host — port 5432 is commonly
+taken by a system Postgres; containers talk to it as `db:5432` internally.)
+
 The API talks to `DATABASE_URL` and the UI talks to `NEXT_PUBLIC_API_URL`
 (defaults to `http://localhost:8000` in `docker-compose.yml`).
 
@@ -68,7 +71,7 @@ The database is seeded with the following accounts (password is `ops123` for all
 
 Backend tests need a **live Postgres** for the dedicated `desk_test` database on
 `localhost:55432` (hardcoded in `backend/tests/conftest.py`, separate from the
-compose DB on 5432). They focus on the core domain rules: workflow transitions,
+compose DB on 5433). They focus on the core domain rules: workflow transitions,
 assignment rules, authorization, and import idempotency.
 
 ```bash

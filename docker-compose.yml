@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: deskpassword
       POSTGRES_DB: desk
     ports:
-      - "5432:5432"
+      # Host port 5433: 5432 is commonly taken by a system Postgres.
+      # Container-to-container traffic still uses db:5432 (see DATABASE_URL below).
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
