@@ -68,6 +68,7 @@ export interface Page<T> {
   items: T[];
   limit: number;
   offset: number;
+  total: number;
   has_more: boolean;
 }
 

@@ -77,6 +77,18 @@ def list_requests(
     return [(r, c) for r, c in db.execute(stmt).all()]
 
 
+def count_requests(
+    db: Session, user: User, *, status: RequestStatus | None
+) -> int:
+    """Total rows matching the list_requests filters (drives pagination)."""
+    stmt = select(func.count()).select_from(DatasetRequest)
+    if user.role == Role.CLIENT:
+        stmt = stmt.where(DatasetRequest.client_id == user.id)
+    if status is not None:
+        stmt = stmt.where(DatasetRequest.status == status)
+    return db.scalar(stmt) or 0
+
+
 def list_events(db: Session, request_id: int) -> list[RequestStatusEvent]:
     return list(
         db.scalars(

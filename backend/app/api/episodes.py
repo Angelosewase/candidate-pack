@@ -60,7 +60,14 @@ def list_episodes(
         EpisodeOut.model_validate({**EpisodeOut.model_validate(e).model_dump(), "assigned_request_id": r})
         for e, r in rows[:limit]
     ]
-    return Page(items=items, limit=limit, offset=offset, has_more=len(rows) > limit)
+    total = episode_service.count_episodes(
+        db,
+        task_name=task_name,
+        quality=quality,
+        robot_id=robot_id,
+        assignable_only=assignable_only,
+    )
+    return Page(items=items, limit=limit, offset=offset, total=total, has_more=len(rows) > limit)
 
 
 @router.post(

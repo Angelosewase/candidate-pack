@@ -48,6 +48,7 @@ class Page(OutputModel, Generic[T]):
     items: list[T]
     limit: int
     offset: int
+    total: int
     has_more: bool
 
 

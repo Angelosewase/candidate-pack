@@ -70,7 +70,8 @@ def list_requests(
     """
     rows = service.list_requests(db, user, status=status, limit=limit + 1, offset=offset)
     items = [_to_out(r, count, user) for r, count in rows[:limit]]
-    return Page(items=items, limit=limit, offset=offset, has_more=len(rows) > limit)
+    total = service.count_requests(db, user, status=status)
+    return Page(items=items, limit=limit, offset=offset, total=total, has_more=len(rows) > limit)
 
 
 @router.post(

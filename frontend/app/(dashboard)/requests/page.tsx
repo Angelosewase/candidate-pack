@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badges";
 import { PageHeader } from "@/components/PageHeader";
+import { DataPagination } from "@/components/DataPagination";
 
 const STATUSES = [
   "",
@@ -28,6 +29,8 @@ const STATUSES = [
   "accepted",
   "rejected",
 ];
+
+const PAGE_SIZE = 15;
 
 function NewRequestForm({ onCreated }: { onCreated: (id: number) => void }) {
   const [taskName, setTaskName] = useState("");
@@ -120,9 +123,12 @@ export default function RequestsPage() {
   const router = useRouter();
   const [requests, setRequests] = useState<DatasetRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const isStaff = user?.role === "operator" || user?.role === "admin";
   const isClient = user?.role === "client";
 
@@ -134,15 +140,21 @@ export default function RequestsPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const page = await api.listRequests({
+      const res = await api.listRequests({
         status: statusFilter || undefined,
-        limit: 100,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
       });
-      setRequests(page.items);
+      setRequests(res.items);
+      setTotal(res.total);
+      if (res.items.length === 0 && res.total > 0 && page > 1) {
+        // List shrank under us (e.g. live updates) — step back to the last page.
+        setPage(Math.max(1, Math.ceil(res.total / PAGE_SIZE)));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load requests");
     }
-  }, [statusFilter]);
+  }, [statusFilter, page]);
 
   /* eslint-disable react-hooks/set-state-in-effect -- initial server-state fetch */
   useEffect(() => {
@@ -185,7 +197,10 @@ export default function RequestsPage() {
         <select
           className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
           aria-label="Filter by status"
         >
           {STATUSES.map((s) => (
@@ -271,6 +286,13 @@ export default function RequestsPage() {
           </div>
         )}
       </ScrollArea>
+
+      <DataPagination
+        page={page}
+        totalPages={totalPages}
+        totalItems={total}
+        onChange={setPage}
+      />
     </div>
   );
 }

@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/table";
 import { ConfirmAction } from "@/components/ConfirmAction";
 import { QualityBadge } from "@/components/status-badges";
+import { DataPagination } from "@/components/DataPagination";
+
+const PAGE_SIZE = 15;
 
 export function EpisodeBrowser({
   requestId,
@@ -29,41 +32,46 @@ export function EpisodeBrowser({
   const [quality, setQuality] = useState("");
   const [assignableOnly, setAssignableOnly] = useState(true);
   const [items, setItems] = useState<Episode[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const LIMIT = 30;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const load = useCallback(
-    async (nextOffset: number, reset: boolean) => {
-      setError(null);
-      try {
-        const page = await api.listEpisodes({
-          task_name: taskName.trim() || undefined,
-          quality: quality || undefined,
-          assignable_only: assignableOnly,
-          limit: LIMIT,
-          offset: nextOffset,
-        });
-        setItems((prev) => (reset ? page.items : [...prev, ...page.items]));
-        setHasMore(page.has_more);
-        setOffset(nextOffset);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load episodes");
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await api.listEpisodes({
+        task_name: taskName.trim() || undefined,
+        quality: quality || undefined,
+        assignable_only: assignableOnly,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+      });
+      setItems(res.items);
+      setTotal(res.total);
+      if (res.items.length === 0 && res.total > 0 && page > 1) {
+        setPage(Math.max(1, Math.ceil(res.total / PAGE_SIZE)));
       }
-    },
-    [taskName, quality, assignableOnly],
-  );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load episodes");
+    }
+  }, [taskName, quality, assignableOnly, page]);
 
   /* eslint-disable react-hooks/set-state-in-effect -- server-state refetch when filters change */
   useEffect(() => {
-    setSelected([]);
-    load(0, true);
+    load();
   }, [load]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Filters change the result set — always restart from page one.
+  function updateFilters(updater: () => void) {
+    setSelected([]);
+    setPage(1);
+    updater();
+  }
 
   function toggle(id: string) {
     setSelected((s) =>
@@ -95,7 +103,9 @@ export function EpisodeBrowser({
             id="ep-task-filter"
             placeholder="e.g. pick cup"
             value={taskName}
-            onChange={(e) => setTaskName(e.target.value)}
+            onChange={(e) =>
+              updateFilters(() => setTaskName(e.target.value))
+            }
             className="w-44"
           />
         </div>
@@ -104,7 +114,9 @@ export function EpisodeBrowser({
           <select
             id="ep-quality-filter"
             value={quality}
-            onChange={(e) => setQuality(e.target.value)}
+            onChange={(e) =>
+              updateFilters(() => setQuality(e.target.value))
+            }
             className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring"
           >
             <option value="">any quality</option>
@@ -116,7 +128,9 @@ export function EpisodeBrowser({
         <label className="flex h-8 cursor-pointer items-center gap-2 text-sm">
           <Checkbox
             checked={assignableOnly}
-            onCheckedChange={(v) => setAssignableOnly(v === true)}
+            onCheckedChange={(v) =>
+              updateFilters(() => setAssignableOnly(v === true))
+            }
           />
           assignable only
         </label>
@@ -215,16 +229,12 @@ export function EpisodeBrowser({
         )}
       </ScrollArea>
 
-      {hasMore && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => load(offset + LIMIT, false)}
-          className="self-start"
-        >
-          Load more
-        </Button>
-      )}
+      <DataPagination
+        page={page}
+        totalPages={totalPages}
+        totalItems={total}
+        onChange={setPage}
+      />
     </div>
   );
 }
