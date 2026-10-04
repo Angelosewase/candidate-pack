@@ -1,6 +1,6 @@
 # AGENTS.md — Dataset Request Desk
 
-Two-app repo, no root tooling or CI. `backend/` (FastAPI + PostgreSQL) and `frontend/` (Next.js + pnpm) are independent — no shared workspace config. Note: `frontend/` has its own nested `.git`; root `git status` shows it as untracked, so commit in the right repo.
+Two-app repo, no root tooling or CI. `backend/` (FastAPI + PostgreSQL) and `frontend/` (Next.js + pnpm) are independent — no shared workspace config. Single git repo: commit everything (including `frontend/`) from the repo root.
 
 ## Run
 
@@ -11,7 +11,7 @@ docker compose up --build
 # backend http://localhost:8000, frontend http://localhost:3000, db localhost:5432
 ```
 
-Backend entrypoint `backend/app/main.py`. Container startup order matters: `alembic upgrade head` → `python3 app/cli.py --users ../seed/users.json` → `uvicorn`. Run Alembic from `backend/` (relies on `prepend_sys_path = .` in `alembic.ini`).
+Backend entrypoint `backend/app/main.py`. Container startup order matters: `alembic upgrade head` → `python3 -m app.cli --users ../seed/users.json` → `uvicorn`. Run Alembic from `backend/` (relies on `prepend_sys_path = .` in `alembic.ini`).
 Config is env-only via `backend/app/config.py` (`DATABASE_URL`, `JWT_SECRET` required in production, `LOG_LEVEL`, `MAX_IMPORT_BYTES`=50MB). Frontend talks to `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000` in `docker-compose.yml`).
 
 Seed logins (password `ops123` for all): `admin@example.com`, `ops1@example.com`, `ops2@example.com`, `client-a@example.com`, `client-b@example.com`.
