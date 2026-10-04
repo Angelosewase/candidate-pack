@@ -1,175 +1,234 @@
-"""Assignment rules + delivery preconditions (service level).
+"""Assignment rules and delivery precondition tests (service layer).
 
 Covers the brief's assignment rules:
-- only good/usable episodes can be assigned;
-- an episode can be assigned to at most one request at a time;
-- re-assigning to the *same* request is idempotent;
-- unassign releases the episode for another request;
-- a request cannot move to delivered until it has episodes_requested assigned.
+- Only good/usable episodes can be assigned.
+- An episode can be assigned to at most one request at a time.
+- Re-assigning to the *same* request is idempotent.
+- Unassign releases the episode for another request.
+- A request cannot move to delivered until it has episodes_requested assigned.
+- Assigned episodes graded 'bad' by a later import block delivery.
 """
 
-import uuid
-from datetime import UTC, datetime, timedelta
-
 import pytest
-from sqlalchemy import select
 
 from app.errors import Conflict, NotFound
-from app.models import Assignment, Episode, Quality, RequestStatus, Robot, Role, User
-from app.schemas import RequestCreate
-from app.security import hash_password
+from app.models import Quality, RequestStatus, Role
 from app.services import assignments as assign_service
 from app.services import requests as request_service
+from tests.factories import (
+    make_episode,
+    make_request,
+    make_user,
+    move_to_in_progress,
+)
 
 
-def _unique(prefix: str) -> str:
-    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+# ---------------------------------------------------------------------------
+# Basic assignment
+# ---------------------------------------------------------------------------
 
 
-def make_user(db, role: Role) -> User:
-    email = f"{_unique(role.value)}@example.com"
-    user = User(
-        email=email,
-        name=f"{role.value} user",
-        role=role,
-        password_hash=hash_password("password123"),
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    return user
+class TestAssign:
+    def test_assign_good_episode_succeeds(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        ep = make_episode(db, Quality.GOOD)
+
+        result = assign_service.assign(db, staff, rid, [ep.episode_id])
+        assert len(result) == 1
+        assert result[0].episode_id == ep.episode_id
+
+    def test_assign_usable_episode_succeeds(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        ep = make_episode(db, Quality.USABLE)
+
+        result = assign_service.assign(db, staff, rid, [ep.episode_id])
+        assert len(result) == 1
+
+    def test_assign_bad_episode_rejected(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        bad = make_episode(db, Quality.BAD)
+
+        with pytest.raises(Conflict, match="Only 'good' or 'usable'"):
+            assign_service.assign(db, staff, rid, [bad.episode_id])
+        # Nothing was assigned.
+        assert assign_service.list_assignments(db, rid) == []
+
+    def test_assign_multiple_episodes_at_once(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 3)
+        move_to_in_progress(db, staff, rid)
+        eps = [make_episode(db, Quality.GOOD) for _ in range(3)]
+
+        result = assign_service.assign(db, staff, rid, [e.episode_id for e in eps])
+        assert {a.episode_id for a in result} == {e.episode_id for e in eps}
 
 
-def make_episode(db, quality: Quality, episode_id: str | None = None) -> Episode:
-    robot_id = "arm-01"
-    if db.get(Robot, robot_id) is None:
-        db.add(Robot(robot_id=robot_id))
-        db.commit()
-    ep = Episode(
-        episode_id=episode_id or f"EP-{uuid.uuid4().int % 10**9:09d}",
-        robot_id=robot_id,
-        task_name="pick cup",
-        recorded_at=datetime.now(UTC) - timedelta(days=1),
-        duration_seconds=60,
-        operator_name="tester",
-        quality=quality,
-    )
-    db.add(ep)
-    db.commit()
-    return ep
+# ---------------------------------------------------------------------------
+# Missing / unknown episodes
+# ---------------------------------------------------------------------------
 
 
-def make_request(db, client: User, episodes_requested: int = 2) -> int:
-    req = request_service.create_request(
-        db,
-        client,
-        RequestCreate(
-            task_name="pick cup",
-            episodes_requested=episodes_requested,
-            deadline=(datetime.now(UTC) + timedelta(days=30)).date(),
-            notes="",
-        ),
-    )
-    return req.id
+class TestAssignMissingEpisodes:
+    def test_missing_episode_reports_id_and_assigns_nothing(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        good = make_episode(db, Quality.GOOD)
+
+        with pytest.raises(NotFound) as exc_info:
+            assign_service.assign(db, staff, rid, [good.episode_id, "EP-000000001"])
+
+        assert "EP-000000001" in str(exc_info.value.details)
+        # All-or-nothing: the valid episode was NOT assigned.
+        assert assign_service.list_assignments(db, rid) == []
 
 
-def move_to_in_progress(db, staff: User, request_id: int) -> None:
-    request_service.transition(db, staff, request_id, RequestStatus.IN_PROGRESS)
+# ---------------------------------------------------------------------------
+# Duplicate / concurrent assignment
+# ---------------------------------------------------------------------------
 
 
-def test_assign_good_and_usable_ok(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid = make_request(db, client)
-    move_to_in_progress(db, staff, rid)
-    good = make_episode(db, Quality.GOOD)
-    usable = make_episode(db, Quality.USABLE)
-    out = assign_service.assign(db, staff, rid, [good.episode_id, usable.episode_id])
-    assert {a.episode_id for a in out} == {good.episode_id, usable.episode_id}
+class TestDoubleAssignment:
+    def test_episode_cannot_be_assigned_to_two_requests(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid1 = make_request(db, client, 1)
+        rid2 = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid1)
+        move_to_in_progress(db, staff, rid2)
+        ep = make_episode(db, Quality.GOOD)
+
+        assign_service.assign(db, staff, rid1, [ep.episode_id])
+        with pytest.raises(Conflict, match="already assigned"):
+            assign_service.assign(db, staff, rid2, [ep.episode_id])
+
+    def test_reassign_same_request_is_idempotent(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        ep = make_episode(db, Quality.GOOD)
+
+        assign_service.assign(db, staff, rid, [ep.episode_id])
+        result = assign_service.assign(db, staff, rid, [ep.episode_id])
+        # Still exactly one assignment.
+        assert len(result) == 1
+        assert result[0].episode_id == ep.episode_id
 
 
-def test_assign_bad_rejected(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid = make_request(db, client)
-    move_to_in_progress(db, staff, rid)
-    bad = make_episode(db, Quality.BAD)
-    with pytest.raises(Conflict, match="Only 'good' or 'usable'"):
-        assign_service.assign(db, staff, rid, [bad.episode_id])
-    assert db.scalar(select(Assignment).where(Assignment.episode_id == bad.episode_id)) is None
+# ---------------------------------------------------------------------------
+# Unassign
+# ---------------------------------------------------------------------------
 
 
-def test_assign_missing_episode_reports_ids_and_assigns_nothing(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid = make_request(db, client)
-    move_to_in_progress(db, staff, rid)
-    good = make_episode(db, Quality.GOOD)
-    with pytest.raises(NotFound) as exc:
-        assign_service.assign(db, staff, rid, [good.episode_id, "EP-000000001"])
-    assert "EP-000000001" in str(exc.value.details)
-    # All-or-nothing: the valid episode was not assigned either.
-    assert assign_service.list_assignments(db, rid) == []
+class TestUnassign:
+    def test_unassign_releases_episode_for_another_request(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid1 = make_request(db, client, 1)
+        rid2 = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid1)
+        move_to_in_progress(db, staff, rid2)
+        ep = make_episode(db, Quality.USABLE)
+
+        assign_service.assign(db, staff, rid1, [ep.episode_id])
+        assign_service.unassign(db, staff, rid1, ep.episode_id)
+
+        result = assign_service.assign(db, staff, rid2, [ep.episode_id])
+        assert result[0].episode_id == ep.episode_id
+
+    def test_unassign_unknown_episode_raises_not_found(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+
+        with pytest.raises(NotFound):
+            assign_service.unassign(db, staff, rid, "EP-000000001")
 
 
-def test_double_assignment_to_other_request_conflicts(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid1 = make_request(db, client)
-    rid2 = make_request(db, client)
-    move_to_in_progress(db, staff, rid1)
-    move_to_in_progress(db, staff, rid2)
-    ep = make_episode(db, Quality.GOOD)
-    assign_service.assign(db, staff, rid1, [ep.episode_id])
-    with pytest.raises(Conflict, match="already assigned"):
-        assign_service.assign(db, staff, rid2, [ep.episode_id])
+# ---------------------------------------------------------------------------
+# Status-gated assignment
+# ---------------------------------------------------------------------------
 
 
-def test_reassign_same_request_is_idempotent(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid = make_request(db, client)
-    move_to_in_progress(db, staff, rid)
-    ep = make_episode(db, Quality.GOOD)
-    assign_service.assign(db, staff, rid, [ep.episode_id])
-    out = assign_service.assign(db, staff, rid, [ep.episode_id])
-    assert len(out) == 1
-    assert out[0].episode_id == ep.episode_id
+class TestAssignStatusGating:
+    def test_assign_blocked_in_submitted_status(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)  # still submitted
+        ep = make_episode(db, Quality.GOOD)
+
+        with pytest.raises(Conflict, match="only be assigned while the request is in progress"):
+            assign_service.assign(db, staff, rid, [ep.episode_id])
+
+    def test_unassign_blocked_when_not_in_progress(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        ep = make_episode(db, Quality.GOOD)
+        assign_service.assign(db, staff, rid, [ep.episode_id])
+        request_service.transition(db, staff, rid, RequestStatus.DELIVERED)
+
+        with pytest.raises(Conflict):
+            assign_service.unassign(db, staff, rid, ep.episode_id)
 
 
-def test_unassign_releases_for_other_request(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid1 = make_request(db, client)
-    rid2 = make_request(db, client)
-    move_to_in_progress(db, staff, rid1)
-    move_to_in_progress(db, staff, rid2)
-    ep = make_episode(db, Quality.USABLE)
-    assign_service.assign(db, staff, rid1, [ep.episode_id])
-    assign_service.unassign(db, staff, rid1, ep.episode_id)
-    out = assign_service.assign(db, staff, rid2, [ep.episode_id])
-    assert [a.episode_id for a in out] == [ep.episode_id]
+# ---------------------------------------------------------------------------
+# Delivery preconditions
+# ---------------------------------------------------------------------------
 
 
-def test_assign_only_in_in_progress(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid = make_request(db, client)  # still submitted
-    ep = make_episode(db, Quality.GOOD)
-    with pytest.raises(Conflict, match="only be assigned while the request is in progress"):
+class TestDeliveryPreconditions:
+    def test_delivered_requires_enough_episodes(self, db):
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 2)
+        move_to_in_progress(db, staff, rid)
+        ep = make_episode(db, Quality.GOOD)
         assign_service.assign(db, staff, rid, [ep.episode_id])
 
+        # Only 1 assigned, need 2 — should fail.
+        with pytest.raises(Conflict, match="needs 2 episodes"):
+            request_service.transition(db, staff, rid, RequestStatus.DELIVERED)
 
-def test_delivered_requires_enough_episodes(db):
-    staff = make_user(db, Role.OPERATOR)
-    client = make_user(db, Role.CLIENT)
-    rid = make_request(db, client, episodes_requested=2)
-    move_to_in_progress(db, staff, rid)
-    ep = make_episode(db, Quality.GOOD)
-    assign_service.assign(db, staff, rid, [ep.episode_id])
-    with pytest.raises(Conflict, match="needs 2 episodes"):
-        request_service.transition(db, staff, rid, RequestStatus.DELIVERED)
-    ep2 = make_episode(db, Quality.USABLE)
-    assign_service.assign(db, staff, rid, [ep2.episode_id])
-    done = request_service.transition(db, staff, rid, RequestStatus.DELIVERED)
-    assert done.status == RequestStatus.DELIVERED
+        ep2 = make_episode(db, Quality.USABLE)
+        assign_service.assign(db, staff, rid, [ep2.episode_id])
+        result = request_service.transition(db, staff, rid, RequestStatus.DELIVERED)
+        assert result.status == RequestStatus.DELIVERED
+
+    def test_delivered_blocked_when_assigned_episode_regraded_bad(self, db):
+        """If a re-imported CSV downgrades an assigned episode to 'bad',
+        delivery must be blocked until the episode is unassigned."""
+        from sqlalchemy import update as sa_update
+        from app.models import Episode
+
+        staff = make_user(db, Role.OPERATOR)
+        client = make_user(db, Role.CLIENT)
+        rid = make_request(db, client, 1)
+        move_to_in_progress(db, staff, rid)
+        ep = make_episode(db, Quality.GOOD)
+        assign_service.assign(db, staff, rid, [ep.episode_id])
+
+        # Simulate a re-import that downgrades the episode.
+        db.execute(
+            sa_update(Episode)
+            .where(Episode.episode_id == ep.episode_id)
+            .values(quality=Quality.BAD)
+        )
+        db.commit()
+
+        with pytest.raises(Conflict, match="graded 'bad'"):
+            request_service.transition(db, staff, rid, RequestStatus.DELIVERED)
