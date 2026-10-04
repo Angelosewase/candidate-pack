@@ -8,3 +8,4 @@ pydantic-settings==2.15.0
 pyjwt==2.15.1
 argon2-cffi==25.1.0
 python-multipart==0.0.32
+sse-starlette==2.1.2
