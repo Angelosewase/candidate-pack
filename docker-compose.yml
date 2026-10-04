@@ -30,10 +30,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      # Seed data lives outside the backend build context, so mount it read-only.
+      - ./seed:/seed:ro
     command: >
       sh -c "
         alembic upgrade head &&
-        python3 -m app.cli --users ../seed/users.json &&
+        python3 -m app.cli --users /seed/users.json &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 

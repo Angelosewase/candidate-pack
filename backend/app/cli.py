@@ -12,9 +12,15 @@ log = logging.getLogger(__name__)
 
 
 def seed(users_file: Path) -> None:
-    with users_file.open() as f:
-        users = json.load(f)
+    try:
+        with users_file.open() as f:
+            users = json.load(f)
+    except FileNotFoundError:
+        log.error(f"Seed file not found: {users_file} (cwd={Path.cwd()})")
+        raise SystemExit(f"seed file not found: {users_file}") from None
 
+    created = 0
+    skipped = 0
     with SessionLocal() as db:
         for u in users:
             try:
@@ -29,8 +35,11 @@ def seed(users_file: Path) -> None:
                     ),
                 )
                 log.info(f"Created user: {u['email']} ({u['role']})")
+                created += 1
             except Exception as e:
                 log.warning(f"Skipped {u['email']}: {e}")
+                skipped += 1
+    log.info(f"Seed done: {created} created, {skipped} skipped ({len(users)} in file)")
 
 
 def import_csv_file(csv_file: Path, uploaded_by: int | None = None) -> dict:
@@ -60,7 +69,10 @@ if __name__ == "__main__":
     parser.add_argument("--users", type=Path, default=Path("../seed/users.json"))
     parser.add_argument("--episodes", type=Path, default=None)
     args = parser.parse_args()
-    if args.users and args.users.exists():
+    # NOTE: no `.exists()` guard here on purpose — a missing seed file must fail
+    # loudly (non-zero exit stops the container startup chain) rather than boot
+    # a userless system that rejects every login with 401.
+    if args.users:
         seed(args.users)
     if args.episodes:
         import_csv_file(args.episodes)
