@@ -1,6 +1,6 @@
 # AGENTS.md — Dataset Request Desk
 
-Two-app repo, no root tooling or CI. `backend/` (FastAPI + PostgreSQL) and `frontend/` (Next.js + pnpm) are independent — no shared workspace config. Single git repo: commit everything (including `frontend/`) from the repo root.
+Two-app repo, no root tooling. `backend/` (FastAPI + PostgreSQL) and `frontend/` (Next.js + pnpm) are independent — no shared workspace config. Single git repo: commit everything (including `frontend/`) from the repo root. CI (`.github/workflows/tests.yml`) runs backend pytest (needs the `postgres` service on 55432) plus frontend typecheck/lint/build.
 
 ## Run
 
