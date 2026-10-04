@@ -26,6 +26,21 @@ This command will:
 The API talks to `DATABASE_URL` and the UI talks to `NEXT_PUBLIC_API_URL`
 (defaults to `http://localhost:8000` in `docker-compose.yml`).
 
+### Environment files
+
+No env files are needed for `docker compose up` (values come from the compose
+file). For local development outside Docker:
+
+* `backend/.env` — already created from `backend/.env.example`
+  (`DATABASE_URL`, `JWT_SECRET`, `LOG_LEVEL`, `MAX_IMPORT_BYTES`, …).
+  `JWT_SECRET` is required in production; the app refuses to boot with the dev
+  default when `ENVIRONMENT=production`.
+* `frontend/.env.local` — already created from `frontend/.env.example`
+  (`NEXT_PUBLIC_API_URL`).
+
+The `.env.example` files are committed as templates; the real `.env` /
+`.env.local` files are git-ignored and never committed.
+
 ### Seed Users
 
 The database is seeded with the following accounts (password is `ops123` for all):
