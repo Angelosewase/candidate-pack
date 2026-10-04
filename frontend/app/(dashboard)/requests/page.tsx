@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, type DatasetRequest } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -233,6 +234,9 @@ export default function RequestsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Progress</TableHead>
                 <TableHead className="hidden md:table-cell">Deadline</TableHead>
+                <TableHead className="w-20 text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -266,6 +270,17 @@ export default function RequestsPage() {
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
                     {r.deadline}
+                  </TableCell>
+                  <TableCell
+                    className="text-right"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      render={<Link href={`/requests/${r.id}`}>View</Link>}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
