@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { RequireRole } from "@/components/RequireRole";
 import { EpisodeBrowser } from "@/components/EpisodeBrowser";
+import { PageHeader } from "@/components/PageHeader";
 
 function EpisodesContent() {
   const searchParams = useSearchParams();
@@ -12,7 +13,11 @@ function EpisodesContent() {
   const requestId = raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Episodes"
+        description="Browse the episode catalogue. Filter by task or quality, tick the episodes you want, then assign them to the selected request."
+      />
       {requestId !== null && (
         <p className="rounded-lg border bg-muted/50 px-3 py-2 text-sm">
           Assigning to request{" "}

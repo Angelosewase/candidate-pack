@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -157,9 +157,10 @@ export function EpisodeBrowser({
         </p>
       )}
 
-      <ScrollArea className="max-h-96 rounded-lg border">
-        <Table>
-          <TableHeader>
+      <ScrollArea className="rounded-lg border">
+        <div className="max-h-96 overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background">
             <TableRow>
               <TableHead className="w-10">
                 <span className="sr-only">Select</span>
@@ -204,7 +205,9 @@ export function EpisodeBrowser({
               );
             })}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
+        <ScrollBar orientation="horizontal" />
         {items.length === 0 && !error && (
           <p className="p-4 text-sm text-muted-foreground">
             No episodes match the current filters.

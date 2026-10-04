@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, type DatasetRequest } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -9,7 +8,7 @@ import { useRequestEvents } from "@/hooks/use-request-events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -19,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badges";
+import { PageHeader } from "@/components/PageHeader";
 
 const STATUSES = [
   "",
@@ -124,6 +124,11 @@ export default function RequestsPage() {
   const [flash, setFlash] = useState<string | null>(null);
 
   const isStaff = user?.role === "operator" || user?.role === "admin";
+  const isClient = user?.role === "client";
+
+  function openRequest(id: number) {
+    router.push(`/requests/${id}`);
+  }
   const { lastEvent } = useRequestEvents(!!user && isStaff);
 
   const load = useCallback(async () => {
@@ -157,7 +162,16 @@ export default function RequestsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {user?.role === "client" && (
+      <PageHeader
+        title="Requests"
+        description={
+          isClient
+            ? "Track your dataset requests below. Create a new one with the form, then open it to follow progress and accept or reject the delivery."
+            : "All client requests in one place. Open a row to move it through the workflow and manage its episodes."
+        }
+      />
+
+      {isClient && (
         <NewRequestForm onCreated={(id) => router.push(`/requests/${id}`)} />
       )}
 
@@ -191,53 +205,70 @@ export default function RequestsPage() {
         </p>
       )}
 
-      <ScrollArea className="max-h-[32rem] rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-14">ID</TableHead>
-              <TableHead>Task</TableHead>
-              {isStaff && <TableHead>Client</TableHead>}
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Progress</TableHead>
-              <TableHead>Deadline</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {requests.map((r) => (
-              <TableRow key={r.id} className="cursor-pointer">
-                <TableCell className="font-mono text-xs">
-                  <Link href={`/requests/${r.id}`} className="hover:underline">
-                    #{r.id}
-                  </Link>
-                </TableCell>
-                <TableCell className="max-w-44 truncate font-medium">
-                  <Link href={`/requests/${r.id}`} className="hover:underline">
-                    {r.task_name}
-                  </Link>
-                </TableCell>
+      <ScrollArea className="rounded-lg border">
+        <div className="max-h-[32rem] overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background">
+              <TableRow>
+                <TableHead className="w-14">ID</TableHead>
+                <TableHead>Task</TableHead>
                 {isStaff && (
-                  <TableCell className="max-w-36 truncate text-muted-foreground">
-                    {r.client.name}
-                  </TableCell>
+                  <TableHead className="hidden lg:table-cell">Client</TableHead>
                 )}
-                <TableCell>
-                  <StatusBadge status={r.status} />
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {r.assigned_count}/{r.episodes_requested}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {r.deadline}
-                </TableCell>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Progress</TableHead>
+                <TableHead className="hidden md:table-cell">Deadline</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {requests.map((r) => (
+                <TableRow
+                  key={r.id}
+                  onClick={() => openRequest(r.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openRequest(r.id);
+                    }
+                  }}
+                  tabIndex={0}
+                  className="cursor-pointer"
+                >
+                  <TableCell className="font-mono text-xs">#{r.id}</TableCell>
+                  <TableCell className="max-w-56 truncate font-medium">
+                    {r.task_name}
+                  </TableCell>
+                  {isStaff && (
+                    <TableCell className="hidden max-w-44 truncate text-muted-foreground lg:table-cell">
+                      {r.client.name}
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <StatusBadge status={r.status} />
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {r.assigned_count}/{r.episodes_requested}
+                  </TableCell>
+                  <TableCell className="hidden text-muted-foreground md:table-cell">
+                    {r.deadline}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <ScrollBar orientation="horizontal" />
         {requests.length === 0 && !error && (
-          <p className="p-4 text-sm text-muted-foreground">
-            No requests match the current filter.
-          </p>
+          <div className="flex flex-col items-start gap-2 p-6">
+            <p className="text-sm font-medium">No requests here yet</p>
+            <p className="text-sm text-muted-foreground">
+              {isClient
+                ? "Create your first dataset request with the form above — tell us the task, how many episodes you need, and by when."
+                : statusFilter
+                  ? "No requests match this status filter. Try another status."
+                  : "New client requests will appear here live as they are submitted."}
+            </p>
+          </div>
         )}
       </ScrollArea>
     </div>

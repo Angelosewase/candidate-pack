@@ -48,7 +48,7 @@ export default function DashboardLayout({
           <h1 className="text-sm font-medium">{title}</h1>
         </header>
         <main className="flex-1 p-4 sm:p-6">
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+          <div className="w-full">{children}</div>
         </main>
       </SidebarInset>
     </SidebarProvider>
