@@ -5,12 +5,24 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { api, type DatasetRequest, type RequestStatus } from "@/lib/api";
 import { useRequestEvents } from "@/hooks/use-request-events";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { LoginForm } from "@/components/LoginForm";
 import { RequestDetailView } from "@/components/RequestDetail";
 import { EpisodeBrowser } from "@/components/EpisodeBrowser";
 import { ImportPanel } from "@/components/ImportPanel";
 import { AnalyticsPanel } from "@/components/AnalyticsPanel";
 import { UsersPanel } from "@/components/UsersPanel";
+import { StatusBadge } from "@/components/status-badges";
 
 const STATUSES: (RequestStatus | "")[] = [
   "",
@@ -50,38 +62,61 @@ function NewRequestForm({ onCreated }: { onCreated: () => void }) {
     }
   }
 
-  const input =
-    "h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring";
-
   return (
-    <form onSubmit={submit} className="flex flex-wrap items-end gap-2 rounded-xl border p-3">
-      <label className="flex flex-col gap-1 text-xs">
-        Task
-        <input className={input} value={taskName} onChange={(e) => setTaskName(e.target.value)} required placeholder="pick cup" />
-      </label>
-      <label className="flex flex-col gap-1 text-xs">
-        Episodes
-        <input
-          className={input}
+    <form
+      onSubmit={submit}
+      className="grid grid-cols-2 gap-2 rounded-xl border p-3 sm:grid-cols-3 lg:grid-cols-[1fr_auto_auto_1fr_auto]"
+    >
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="new-task">Task</Label>
+        <Input
+          id="new-task"
+          value={taskName}
+          onChange={(e) => setTaskName(e.target.value)}
+          required
+          placeholder="pick cup"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="new-count">Episodes</Label>
+        <Input
+          id="new-count"
           type="number"
           min={1}
           value={count}
           onChange={(e) => setCount(Number(e.target.value))}
           required
         />
-      </label>
-      <label className="flex flex-col gap-1 text-xs">
-        Deadline
-        <input className={input} type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} required />
-      </label>
-      <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs">
-        Notes
-        <input className={input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional" />
-      </label>
-      <Button size="sm" type="submit" disabled={busy}>
-        {busy ? "…" : "Create request"}
-      </Button>
-      {error && <p className="w-full text-sm text-destructive">{error}</p>}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="new-deadline">Deadline</Label>
+        <Input
+          id="new-deadline"
+          type="date"
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+          required
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="new-notes">Notes</Label>
+        <Input
+          id="new-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="optional"
+        />
+      </div>
+      <div className="flex items-end">
+        <Button size="sm" type="submit" disabled={busy} className="w-full">
+          {busy ? "…" : "Create request"}
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="col-span-full text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
@@ -203,28 +238,61 @@ function Dashboard() {
                 Refresh
               </Button>
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <ul className="flex flex-col gap-1.5">
-              {requests.map((r) => (
-                <li key={r.id}>
-                  <button
-                    onClick={() => setSelectedId(r.id)}
-                    className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm hover:bg-muted ${
-                      selectedId === r.id ? "border-ring bg-muted" : ""
-                    }`}
-                  >
-                    <span className="font-medium">#{r.id}</span>
-                    <span className="min-w-0 flex-1 truncate">{r.task_name}</span>
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">
-                      {r.status.replace("_", " ")} · {r.assigned_count}/{r.episodes_requested}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {requests.length === 0 && !error && (
-              <p className="text-sm text-muted-foreground">No requests.</p>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
             )}
+            <ScrollArea className="max-h-[32rem] rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-14">ID</TableHead>
+                    <TableHead>Task</TableHead>
+                    {isStaff && <TableHead>Client</TableHead>}
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Progress</TableHead>
+                    <TableHead>Deadline</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requests.map((r) => (
+                    <TableRow
+                      key={r.id}
+                      data-state={selectedId === r.id ? "selected" : undefined}
+                      onClick={() => setSelectedId(r.id)}
+                      className="cursor-pointer"
+                    >
+                      <TableCell className="font-mono text-xs">
+                        #{r.id}
+                      </TableCell>
+                      <TableCell className="max-w-44 truncate font-medium">
+                        {r.task_name}
+                      </TableCell>
+                      {isStaff && (
+                        <TableCell className="max-w-36 truncate text-muted-foreground">
+                          {r.client.name}
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <StatusBadge status={r.status} />
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {r.assigned_count}/{r.episodes_requested}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {r.deadline}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {requests.length === 0 && !error && (
+                <p className="p-4 text-sm text-muted-foreground">
+                  No requests match the current filter.
+                </p>
+              )}
+            </ScrollArea>
           </div>
           <div className="rounded-xl border p-4">
             {selectedId === null ? (

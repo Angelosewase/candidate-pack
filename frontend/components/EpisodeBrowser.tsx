@@ -3,6 +3,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Episode } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ConfirmAction } from "@/components/ConfirmAction";
+import { QualityBadge } from "@/components/status-badges";
 
 export function EpisodeBrowser({
   requestId,
@@ -52,7 +66,9 @@ export function EpisodeBrowser({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   function toggle(id: string) {
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+    setSelected((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : [...s, id],
+    );
   }
 
   async function assign() {
@@ -70,34 +86,37 @@ export function EpisodeBrowser({
     }
   }
 
-  const input =
-    "h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring";
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className={input}
-          placeholder="Filter by task_name"
-          value={taskName}
-          onChange={(e) => setTaskName(e.target.value)}
-        />
-        <select
-          className={input}
-          value={quality}
-          onChange={(e) => setQuality(e.target.value)}
-          aria-label="Filter by quality"
-        >
-          <option value="">any quality</option>
-          <option value="good">good</option>
-          <option value="usable">usable</option>
-          <option value="bad">bad</option>
-        </select>
-        <label className="flex items-center gap-1.5 text-sm">
-          <input
-            type="checkbox"
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ep-task-filter">Task name</Label>
+          <Input
+            id="ep-task-filter"
+            placeholder="e.g. pick cup"
+            value={taskName}
+            onChange={(e) => setTaskName(e.target.value)}
+            className="w-44"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ep-quality-filter">Quality</Label>
+          <select
+            id="ep-quality-filter"
+            value={quality}
+            onChange={(e) => setQuality(e.target.value)}
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring"
+          >
+            <option value="">any quality</option>
+            <option value="good">good</option>
+            <option value="usable">usable</option>
+            <option value="bad">bad</option>
+          </select>
+        </div>
+        <label className="flex h-8 cursor-pointer items-center gap-2 text-sm">
+          <Checkbox
             checked={assignableOnly}
-            onChange={(e) => setAssignableOnly(e.target.checked)}
+            onCheckedChange={(v) => setAssignableOnly(v === true)}
           />
           assignable only
         </label>
@@ -110,47 +129,96 @@ export function EpisodeBrowser({
       )}
 
       {selected.length > 0 && requestId && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {selected.length} selected
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2">
+          <span className="text-sm">
+            {selected.length} episode{selected.length === 1 ? "" : "s"} selected
           </span>
-          <Button size="sm" disabled={busy} onClick={assign}>
-            {busy ? "Assigning…" : `Assign to #${requestId}`}
-          </Button>
+          <ConfirmAction
+            title={`Assign ${selected.length} episode${selected.length === 1 ? "" : "s"} to request #${requestId}?`}
+            description="Only unassigned episodes graded good or usable can be assigned. The operation is all-or-nothing: if any episode fails a rule, nothing is assigned."
+            confirmLabel={`Assign to #${requestId}`}
+            disabled={busy}
+            onConfirm={assign}
+            trigger={
+              <Button size="sm" disabled={busy}>
+                {busy ? "Assigning…" : `Assign to #${requestId}`}
+              </Button>
+            }
+          />
           <Button size="sm" variant="ghost" onClick={() => setSelected([])}>
             clear
           </Button>
         </div>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <ul className="flex flex-col gap-1.5">
-        {items.map((e) => (
-          <li
-            key={e.episode_id}
-            className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
-          >
-            <input
-              type="checkbox"
-              checked={selected.includes(e.episode_id)}
-              onChange={() => toggle(e.episode_id)}
-              disabled={e.assigned_request_id !== null}
-              aria-label={`select ${e.episode_id}`}
-            />
-            <span className="font-mono text-xs">{e.episode_id}</span>
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">
-              {e.task_name} · {e.robot_id} · {e.quality}
-              {e.assigned_request_id !== null && ` · → #${e.assigned_request_id}`}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {items.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground">No episodes match.</p>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
       )}
+
+      <ScrollArea className="max-h-96 rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">
+                <span className="sr-only">Select</span>
+              </TableHead>
+              <TableHead>Episode</TableHead>
+              <TableHead>Task</TableHead>
+              <TableHead>Robot</TableHead>
+              <TableHead>Quality</TableHead>
+              <TableHead>Assigned to</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((e) => {
+              const taken = e.assigned_request_id !== null;
+              return (
+                <TableRow
+                  key={e.episode_id}
+                  data-state={selected.includes(e.episode_id) ? "selected" : undefined}
+                >
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.includes(e.episode_id)}
+                      disabled={taken}
+                      onCheckedChange={() => toggle(e.episode_id)}
+                      aria-label={`select ${e.episode_id}`}
+                    />
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {e.episode_id}
+                  </TableCell>
+                  <TableCell className="max-w-40 truncate">
+                    {e.task_name}
+                  </TableCell>
+                  <TableCell>{e.robot_id}</TableCell>
+                  <TableCell>
+                    <QualityBadge quality={e.quality} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {taken ? `#${e.assigned_request_id}` : "—"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+        {items.length === 0 && !error && (
+          <p className="p-4 text-sm text-muted-foreground">
+            No episodes match the current filters.
+          </p>
+        )}
+      </ScrollArea>
+
       {hasMore && (
-        <Button variant="outline" size="sm" onClick={() => load(offset + LIMIT, false)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => load(offset + LIMIT, false)}
+          className="self-start"
+        >
           Load more
         </Button>
       )}

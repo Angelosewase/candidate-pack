@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-
-const PRESETS = [
-  { email: "client-a@example.com", label: "client-a" },
-  { email: "ops1@example.com", label: "operator" },
-  { email: "admin@example.com", label: "admin" },
-];
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("ops1@example.com");
-  const [password, setPassword] = useState("ops123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -22,59 +22,95 @@ export function LoginForm() {
     setError(null);
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, remember);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(
+        err instanceof Error ? err.message : "Sign-in failed. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  const input =
-    "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring";
-
   return (
-    <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3 rounded-xl border p-6">
-      <div>
-        <h1 className="text-base font-medium">Dataset Request Desk</h1>
+    <div className="flex w-full max-w-sm flex-col gap-6 rounded-xl border bg-card p-6 shadow-sm">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <LogIn className="size-5" aria-hidden />
+        </div>
+        <h1 className="text-lg font-medium">Dataset Request Desk</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in with a seed account (password <kbd>ops123</kbd> for the presets).
+          Sign in to manage dataset requests and episodes.
         </p>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {PRESETS.map((p) => (
-          <Button
-            key={p.email}
-            type="button"
-            variant="secondary"
-            size="xs"
-            onClick={() => {
-              setEmail(p.email);
-              setPassword("ops123");
-            }}
-          >
-            {p.label}
-          </Button>
-        ))}
-      </div>
-      <label className="flex flex-col gap-1 text-sm">
-        Email
-        <input className={input} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Password
-        <input
-          className={input}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
-      </label>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={busy}>
-        {busy ? "Signing in…" : "Sign in"}
-      </Button>
-    </form>
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="login-email">Email</Label>
+          <Input
+            id="login-email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            required
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="login-password">Password</Label>
+          <div className="relative">
+            <Input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              className="pr-9"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              {showPassword ? (
+                <EyeOff className="size-4" aria-hidden />
+              ) : (
+                <Eye className="size-4" aria-hidden />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <Checkbox
+            checked={remember}
+            onCheckedChange={(v) => setRemember(v === true)}
+          />
+          <span>
+            Remember me
+            <span className="block text-xs text-muted-foreground">
+              {remember
+                ? "Stay signed in on this device."
+                : "Sign out when this tab closes."}
+            </span>
+          </span>
+        </label>
+
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        <Button type="submit" disabled={busy} className="w-full">
+          {busy ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
+    </div>
   );
 }

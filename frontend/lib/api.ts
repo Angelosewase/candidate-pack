@@ -96,13 +96,24 @@ export class ApiError extends Error {
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("desk.token");
+  // Remembered sessions live in localStorage; session-only ones in sessionStorage.
+  return (
+    window.localStorage.getItem("desk.token") ??
+    window.sessionStorage.getItem("desk.token")
+  );
 }
 
-export function setToken(token: string | null) {
+export function setToken(token: string | null, remember = true) {
   if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem("desk.token", token);
-  else window.localStorage.removeItem("desk.token");
+  if (token) {
+    (remember ? window.localStorage : window.sessionStorage).setItem(
+      "desk.token",
+      token,
+    );
+  } else {
+    window.localStorage.removeItem("desk.token");
+    window.sessionStorage.removeItem("desk.token");
+  }
 }
 
 async function request<T>(

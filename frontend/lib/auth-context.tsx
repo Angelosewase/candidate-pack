@@ -13,7 +13,7 @@ import { api, getToken, setToken, type User } from "@/lib/api";
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => void;
 }
 
@@ -42,11 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { access_token, user } = await api.login(email, password);
-    setToken(access_token);
-    setUser(user);
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string, remember = true) => {
+      const { access_token, user } = await api.login(email, password);
+      setToken(access_token, remember);
+      setUser(user);
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setToken(null);

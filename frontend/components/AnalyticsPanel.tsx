@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { api, type Analytics } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function iso(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -29,18 +31,27 @@ export function AnalyticsPanel() {
     }
   }
 
-  const input =
-    "h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring";
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <label className="flex items-center gap-1.5">
-          From <input type="date" className={input} value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label className="flex items-center gap-1.5">
-          To <input type="date" className={input} value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
+      <div className="flex flex-wrap items-end gap-2 text-sm">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="analytics-from">From</Label>
+          <Input
+            id="analytics-from"
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="analytics-to">To</Label>
+          <Input
+            id="analytics-to"
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </div>
         <Button size="sm" disabled={busy} onClick={load}>
           {busy ? "…" : "Run"}
         </Button>

@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export function ImportPanel() {
   const [result, setResult] = useState<Awaited<ReturnType<typeof api.importCsv>> | null>(null);
@@ -42,16 +53,16 @@ export function ImportPanel() {
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-sm">
-        Upload episode CSV (idempotent, max 50MB)
-        <input
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="csv-upload">Upload episode CSV (idempotent, max 50MB)</Label>
+        <Input
+          id="csv-upload"
           type="file"
           accept=".csv,text/csv"
           disabled={busy}
           onChange={(e) => onFile(e.target.files?.[0])}
-          className="text-sm"
         />
-      </label>
+      </div>
       {busy && <p className="text-sm text-muted-foreground">Importing…</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
       {result && (
@@ -85,19 +96,43 @@ export function ImportPanel() {
           ))}
         </div>
       )}
-      <div>
-        <h3 className="mb-1 text-sm font-medium">Recent imports</h3>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">Recent imports</h3>
         {history.length === 0 ? (
           <p className="text-sm text-muted-foreground">None yet.</p>
         ) : (
-          <ul className="flex flex-col gap-1 text-sm">
-            {history.map((h) => (
-              <li key={h.id} className="text-muted-foreground">
-                <span className="text-foreground">#{h.id} {h.filename}</span> · {h.inserted}↑{" "}
-                {h.updated}~ {h.unchanged}= {h.skipped}✕ of {h.total_rows}
-              </li>
-            ))}
-          </ul>
+          <ScrollArea className="max-h-56 rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>File</TableHead>
+                  <TableHead className="text-right">Inserted</TableHead>
+                  <TableHead className="text-right">Updated</TableHead>
+                  <TableHead className="text-right">Unchanged</TableHead>
+                  <TableHead className="text-right">Skipped</TableHead>
+                  <TableHead className="text-right">Rows</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {history.map((h) => (
+                  <TableRow key={h.id}>
+                    <TableCell className="font-mono text-xs">#{h.id}</TableCell>
+                    <TableCell className="max-w-40 truncate">
+                      {h.filename}
+                    </TableCell>
+                    <TableCell className="text-right">{h.inserted}</TableCell>
+                    <TableCell className="text-right">{h.updated}</TableCell>
+                    <TableCell className="text-right">{h.unchanged}</TableCell>
+                    <TableCell className="text-right">{h.skipped}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {h.total_rows}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         )}
       </div>
       <Button variant="outline" size="sm" onClick={loadHistory} className="self-start">
