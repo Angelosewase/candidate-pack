@@ -43,21 +43,38 @@ class OutputModel(BaseModel):
 
 
 class Page(OutputModel, Generic[T]):
+    """Paginated list response."""
+
     items: list[T]
     limit: int
     offset: int
     has_more: bool
 
 
+# --- health -----------------------------------------------------------------------
+
+
+class HealthOut(BaseModel):
+    """Liveness response."""
+
+    status: str = Field(examples=["ok"])
+
+
 # --- auth / users -----------------------------------------------------------------
 
 
 class LoginIn(InputModel):
-    email: Annotated[str, StringConstraints(max_length=254)]
-    password: Annotated[str, StringConstraints(max_length=200)]
+    """Login credentials."""
+
+    email: Annotated[str, StringConstraints(max_length=254)] = Field(
+        examples=["admin@example.com"]
+    )
+    password: Annotated[str, StringConstraints(max_length=200)] = Field(examples=["ops123"])
 
 
 class UserOut(OutputModel):
+    """Full user representation (returned after login or from the admin user list)."""
+
     id: int
     email: str
     name: str
@@ -68,6 +85,8 @@ class UserOut(OutputModel):
 
 
 class UserBrief(OutputModel):
+    """Condensed user reference embedded inside other objects."""
+
     id: int
     name: str
     organisation: str | None = None
@@ -75,12 +94,16 @@ class UserBrief(OutputModel):
 
 
 class TokenOut(BaseModel):
+    """JWT access token and the authenticated user."""
+
     access_token: str
     token_type: str = "bearer"
     user: UserOut
 
 
 class UserCreate(InputModel):
+    """Payload for admin-only user creation."""
+
     email: Email
     name: Name
     password: Password
@@ -89,6 +112,11 @@ class UserCreate(InputModel):
 
 
 class UserUpdate(InputModel):
+    """Partial update payload for admin-only user management.
+
+    All fields are optional; only supplied fields are changed.
+    """
+
     name: Name | None = None
     organisation: Name | None = None
     role: Role | None = None
@@ -100,18 +128,28 @@ class UserUpdate(InputModel):
 
 
 class RequestCreate(InputModel):
-    task_name: TaskName
-    episodes_requested: int = Field(ge=1, le=100_000)
-    deadline: date
-    notes: Annotated[str, StringConstraints(max_length=5000)] = ""
+    """Payload to create a new dataset request (client only)."""
+
+    task_name: TaskName = Field(examples=["pick cup"])
+    episodes_requested: int = Field(ge=1, le=100_000, examples=[50])
+    deadline: date = Field(examples=["2026-12-31"])
+    notes: Annotated[str, StringConstraints(max_length=5000)] = Field(default="", examples=[""])
 
 
 class TransitionIn(InputModel):
+    """Payload to advance a request's status."""
+
     to_status: RequestStatus
-    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] | None = None
+    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] | None = Field(
+        default=None,
+        description="Required when rejecting a delivered request.",
+        examples=["Gripper was occluded in all clips."],
+    )
 
 
 class StatusEventOut(OutputModel):
+    """One entry in the audit trail of a request's status history."""
+
     id: int
     from_status: RequestStatus | None
     to_status: RequestStatus
@@ -121,6 +159,8 @@ class StatusEventOut(OutputModel):
 
 
 class RequestOut(OutputModel):
+    """Dataset request summary (returned in list views)."""
+
     id: int
     client: UserBrief
     task_name: str
@@ -130,11 +170,15 @@ class RequestOut(OutputModel):
     status: RequestStatus
     created_at: datetime
     updated_at: datetime
-    assigned_count: int
-    allowed_transitions: list[RequestStatus]
+    assigned_count: int = Field(description="Number of episodes currently assigned.")
+    allowed_transitions: list[RequestStatus] = Field(
+        description="Status values the calling user may transition this request to."
+    )
 
 
 class RequestDetailOut(RequestOut):
+    """Full request detail including the complete status-change audit trail."""
+
     events: list[StatusEventOut]
 
 
@@ -142,6 +186,8 @@ class RequestDetailOut(RequestOut):
 
 
 class EpisodeOut(OutputModel):
+    """Episode metadata, optionally annotated with the request it's assigned to."""
+
     episode_id: str
     robot_id: str
     task_name: str
@@ -149,43 +195,78 @@ class EpisodeOut(OutputModel):
     duration_seconds: int | None
     operator_name: str | None
     quality: Quality
-    assigned_request_id: int | None = None
+    assigned_request_id: int | None = Field(
+        default=None,
+        description="ID of the request this episode is currently assigned to, or null.",
+    )
 
 
 class AssignIn(InputModel):
+    """Batch assignment payload (staff only). Up to 500 episode IDs per call."""
+
     episode_ids: list[Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)]] = (
-        Field(min_length=1, max_length=500)
+        Field(min_length=1, max_length=500, examples=[["EP-000000001", "EP-000000002"]])
     )
 
 
 class AssignmentOut(OutputModel):
+    """A single active episode assignment."""
+
     episode: EpisodeOut
     assigned_at: datetime
     assigned_by: int
+
+
+# --- import history ---------------------------------------------------------------
+
+
+class ImportRunOut(BaseModel):
+    """Summary of one CSV import run (returned by GET /imports)."""
+
+    id: int
+    filename: str
+    total_rows: int
+    inserted: int
+    updated: int
+    unchanged: int
+    skipped: int
+    created_at: datetime | None
 
 
 # --- analytics --------------------------------------------------------------------
 
 
 class EpisodesPerDay(BaseModel):
+    """Episode count for one calendar day and one robot."""
+
     day: date
     robot_id: str
     episodes: int
 
 
 class RequestFulfilment(BaseModel):
-    by_status: dict[RequestStatus, int]
-    total: int
-    delivered_count: int
-    median_hours_submitted_to_delivered: float | None
+    """Request pipeline health statistics for the queried date range."""
+
+    by_status: dict[RequestStatus, int] = Field(
+        description="Count of requests grouped by current status."
+    )
+    total: int = Field(description="Total requests in the date range.")
+    delivered_count: int = Field(description="Requests that reached 'delivered' at least once.")
+    median_hours_submitted_to_delivered: float | None = Field(
+        description="Median hours from submission to first delivery. Null if no deliveries."
+    )
 
 
 class TopTask(BaseModel):
+    """One entry in the top-5 tasks by good episode count."""
+
     task_name: str
     good_episodes: int
 
 
 class AnalyticsOut(BaseModel):
+    """Analytics response for a given date range."""
+
     date_from: date
     date_to: date
     episodes_per_day: list[EpisodesPerDay]
