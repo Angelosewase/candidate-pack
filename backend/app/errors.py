@@ -40,3 +40,8 @@ class Conflict(DomainError):
 class InvalidInput(DomainError):
     status_code = 422
     code = "invalid_input"
+
+
+class PayloadTooLarge(DomainError):
+    status_code = 413
+    code = "payload_too_large"

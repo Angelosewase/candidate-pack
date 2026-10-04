@@ -31,7 +31,7 @@ def _valid_task_name(value: str) -> str:
 Email = Annotated[str, StringConstraints(max_length=254), AfterValidator(_valid_email)]
 TaskName = Annotated[str, StringConstraints(max_length=200), AfterValidator(_valid_task_name)]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-Password = Annotated[str, StringConstraints(min_length=8, max_length=200)]
+Password = Annotated[str, StringConstraints(min_length=6, max_length=200)]
 
 
 class InputModel(BaseModel):

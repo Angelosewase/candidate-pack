@@ -15,12 +15,59 @@ The system is a three-tier web application using Next.js (frontend), FastAPI (ba
 * Frontend tests (focus was placed entirely on backend correctness).
 * Comprehensive request history UI (the API serves the event log, but full timeline visualization is complex).
 
+**Import row-handling decisions (verified against `seed/episodes.csv`):**
+Importing the 191-row seed file inserts 173 episodes and skips 18, each with a
+machine-readable reason: identical in-file duplicates are imported once
+(`duplicate_in_file` ×2); same id with disagreeing values is rejected entirely
+(`conflicting_duplicate` ×4 — e.g. EP-00011 graded both `bad` and `good`, we
+can't know which is right); blank id, blank/missing quality, unknown quality
+(`excellent`), unknown robot (`arm-99`), blank robot, future timestamp
+(2031), unparseable date (`not a date`), out-of-range duration (`-5`, `999999`),
+short column count (`malformed_row`), and blank lines are all skipped rather
+than guessed. Silently normalised: id/quality casing (`Good`, `USABLE`),
+id case (`ep-00003`), task-name whitespace/case (`"  Pick Cup "` → `pick cup`,
+matching API-side normalisation so filters agree), `DD/MM/YYYY` and
+space-separated datetimes, fractional durations (rounded, reported as a
+warning), and missing duration/operator (stored as NULL with a warning).
+Re-importing the same file inserts/updates nothing (`unchanged`), and a
+corrected field updates the row (`updated`). A correction that re-grades an
+*assigned* episode to `bad` is surfaced as an `assigned_episode_now_bad`
+warning instead of silently breaking the delivery precondition.
+
+**Decisions made while finishing the work:**
+* `/analytics` is staff-wide (operator + admin), not admin-only: operators own
+  fulfilment and need the numbers; clients still get 403. Inverted date ranges
+  are rejected (422) rather than silently returning empty.
+* `MAX_IMPORT_BYTES` (50MB) is now enforced in `POST /import` with a 413
+  `payload_too_large` error instead of being config-that-nothing-reads.
+* Added `GET /imports` (recent import runs) so the UI can show import history,
+  and `python3 -m app.cli --episodes file.csv` as the CLI twin of the endpoint
+  (same service function, same report) for files too big for HTTP.
+* Seed passwords unified to `ops123` for all five accounts, matching the README
+  and the frontend's login presets.
+* The assignment partial unique index is declared both in migration 0001 *and*
+  in `models.py` `__table_args__`, so `Base.metadata.create_all` (used by tests)
+  creates the same concurrency guard as production.
+* Frontend SSE uses `fetch` + stream parsing instead of `EventSource`, because
+  `EventSource` cannot send the `Authorization: header the `/events` endpoint
+  requires; the hook reconnects with backoff and the UI re-fetches on each event.
+
 **With two more days:**
 I would implement background workers (e.g., Celery or RQ) to handle the CSV parsing asynchronously, returning a job ID to the client that can be polled for the import report. I would also add more comprehensive unit tests for the FastAPI routes (currently tests focus heavily on the service logic).
 
 ## 3. What Went Wrong
 
 During the migration setup, Alembic failed to import the `app` package because `backend/` wasn't on the Python path. I diagnosed this by reading the traceback which showed `ModuleNotFoundError: No module named 'app'` inside `alembic/env.py`. The fix was adding `prepend_sys_path = .` to `alembic.ini`. Also, the initial seed users had 6-character passwords (`ops123`), but the Pydantic schema required 8. I updated the schema validator to accept a minimum of 6 characters so the seed data would load successfully.
+
+A second instance of the same class of bug surfaced during end-to-end testing:
+`docker-compose.yml` ran the seed step as `python3 app/cli.py`, which fails with
+`ModuleNotFoundError: No module named 'app'` because for `python path/to/script.py`
+`sys.path[0]` is the *script's* directory (`app/`), not the project root. It had
+gone unnoticed because compose was never run green locally (the `|| true` masked
+the failure and the API still booted without seed users). I reproduced it against
+a scratch database, switched the command to `python3 -m app.cli` (module mode
+puts the cwd on the path), and dropped the `|| true` so a seed failure now fails
+the container loudly instead of booting a userless system.
 
 ## 4. Security
 

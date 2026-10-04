@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import STAFF, get_current_user, require_roles
-from app.models import Quality, Role, User
+from app.config import get_settings
+from app.errors import InvalidInput, PayloadTooLarge
+from app.models import Quality, User
 from app.schemas import AnalyticsOut, EpisodeOut, Page
 from app.services import analytics as analytics_service
 from app.services import episodes as episode_service
@@ -49,9 +51,37 @@ async def import_csv(
     db: Session = Depends(get_db),
     user: User = Depends(staff_only),
 ) -> dict:
+    max_bytes = get_settings().max_import_bytes
     data = await file.read()
+    if len(data) > max_bytes:
+        raise PayloadTooLarge(
+            f"File is {len(data)} bytes; limit is {max_bytes} bytes",
+            details={"size_bytes": len(data), "limit_bytes": max_bytes},
+        )
     text = importer.decode_upload(data)
     return importer.import_episodes(db, text, filename=file.filename or "upload.csv", uploaded_by=user.id)
+
+
+@router.get("/imports", response_model=list[dict])
+def list_imports(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(staff_only),
+) -> list[dict]:
+    runs = episode_service.list_import_runs(db, limit=limit)
+    return [
+        {
+            "id": r.id,
+            "filename": r.filename,
+            "total_rows": r.total_rows,
+            "inserted": r.inserted,
+            "updated": r.updated,
+            "unchanged": r.unchanged,
+            "skipped": r.skipped,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in runs
+    ]
 
 
 @router.get("/analytics", response_model=AnalyticsOut)
@@ -59,6 +89,8 @@ def get_analytics(
     date_from: date,
     date_to: date,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(Role.ADMIN)),
+    _: User = Depends(staff_only),
 ) -> AnalyticsOut:
+    if date_from > date_to:
+        raise InvalidInput("date_from must not be after date_to")
     return analytics_service.get_analytics(db, date_from, date_to)

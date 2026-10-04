@@ -31,7 +31,7 @@ services:
     command: >
       sh -c "
         alembic upgrade head &&
-        python3 app/cli.py --users ../seed/users.json || true &&
+        python3 -m app.cli --users ../seed/users.json &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 

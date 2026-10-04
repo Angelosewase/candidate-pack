@@ -10,10 +10,12 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -104,7 +106,7 @@ class DatasetRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    client: Mapped[User] = relationship(lazy="joined")
+    client: Mapped[User] = relationship(lazy="joined", innerjoin=True)
 
 
 class RequestStatusEvent(Base):
@@ -120,7 +122,7 @@ class RequestStatusEvent(Base):
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    actor: Mapped[User] = relationship(lazy="joined")
+    actor: Mapped[User] = relationship(lazy="joined", innerjoin=True)
 
 
 class Assignment(Base):
@@ -133,6 +135,23 @@ class Assignment(Base):
 
     __tablename__ = "assignments"
 
+    __table_args__ = (
+        # Mirrors migration 0001 (uq_assignments_active_episode): the DB itself
+        # enforces "one active assignment per episode". Declared here too so
+        # Base.metadata.create_all (used by tests) creates the same guard.
+        Index(
+            "uq_assignments_active_episode",
+            "episode_id",
+            unique=True,
+            postgresql_where=text("released_at IS NULL"),
+        ),
+        Index(
+            "ix_assignments_active_request",
+            "request_id",
+            postgresql_where=text("released_at IS NULL"),
+        ),
+    )
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("dataset_requests.id"))
     episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.episode_id"))
@@ -141,7 +160,7 @@ class Assignment(Base):
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
-    episode: Mapped[Episode] = relationship(lazy="joined")
+    episode: Mapped[Episode] = relationship(lazy="joined", innerjoin=True)
 
 
 class ImportRun(Base):
