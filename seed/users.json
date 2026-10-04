@@ -1,7 +1,37 @@
 [
-  {"email": "admin@example.com",    "password": "ops123", "role": "admin",    "name": "Ada Admin"},
-  {"email": "ops1@example.com",     "password": "ops123", "role": "operator", "name": "Olu Operator"},
-  {"email": "ops2@example.com",     "password": "ops123", "role": "operator", "name": "Odile Operator"},
-  {"email": "client-a@example.com", "password": "ops123", "role": "client",   "name": "Acme Robotics", "organisation": "Acme Robotics"},
-  {"email": "client-b@example.com", "password": "ops123", "role": "client",   "name": "Beta Labs",     "organisation": "Beta Labs"}
+  {
+    "email": "admin@example.com",
+    "password": "ops123",
+    "role": "admin",
+    "name": "Ada Admin",
+    "organisation": null
+  },
+  {
+    "email": "ops1@example.com",
+    "password": "ops123",
+    "role": "operator",
+    "name": "Olu Operator",
+    "organisation": null
+  },
+  {
+    "email": "ops2@example.com",
+    "password": "ops123",
+    "role": "operator",
+    "name": "Odile Operator",
+    "organisation": null
+  },
+  {
+    "email": "client-a@example.com",
+    "password": "ops123",
+    "role": "client",
+    "name": "Acme Robotics",
+    "organisation": "Acme Robotics"
+  },
+  {
+    "email": "client-b@example.com",
+    "password": "ops123",
+    "role": "client",
+    "name": "Beta Labs",
+    "organisation": "Beta Labs"
+  }
 ]
